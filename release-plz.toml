@@ -1,3 +1,7 @@
+[workspace]
+# publish only when a release PR merges, never on other pushes to main
+release_always = false
+
 # the three crates ship together: probes, their macros and the subcommand reading them
 [[package]]
 name = "codegen-probe"
