@@ -38,7 +38,7 @@ pub struct Package {
     /// Features the package is built with, the probe feature included
     features: Vec<String>,
     default_features: bool,
-    /// Where the package gets `codegen` from, so the host enables `codegen/enabled` on that very crate
+    /// Where the package gets `codegen` from, so the host enables `codegen-probe/enabled` on that very crate
     codegen_source: String,
     /// Root of the package's workspace, whose `Cargo.lock` pins the host crate's dependencies
     workspace_root: PathBuf,
@@ -290,16 +290,19 @@ fn library_name(package: &Value, name: &str) -> Result<String, String> {
     Ok(library_name.replace('-', "_"))
 }
 
-/// The package's normal dependency on `codegen`, under that name, as the attributes expand to `::codegen::`
+/// The package's normal, unrenamed dependency on `codegen-probe`, imported as `codegen`
+/// as the attributes expand to `::codegen::`
 fn codegen_dependency<'p>(package: &'p Value, name: &str) -> Result<&'p Value, String> {
     let dependencies = package["dependencies"].as_array();
     let found = dependencies.into_iter().flatten().find(|dependency| {
         let is_normal = dependency["kind"].is_null();
         let is_unrenamed = dependency["rename"].is_null();
-        dependency["name"] == "codegen" && is_normal && is_unrenamed
+        dependency["name"] == "codegen-probe" && is_normal && is_unrenamed
     });
     found.ok_or_else(|| {
-        format!("package {name} doesn't depend on `codegen` under that name, which its probes need")
+        format!(
+            "package {name} doesn't depend on `codegen-probe` without renaming it, which its probes need"
+        )
     })
 }
 
@@ -327,7 +330,7 @@ fn dependency_source(dependency: &Value, name: &str) -> Result<String, String> {
         return Ok(format!("git = {}{rev}", toml_string(url)));
     }
     Err(format!(
-        "package {name} gets `codegen` from {source}, which cargo-codegen can't mirror"
+        "package {name} gets `codegen-probe` from {source}, which cargo-codegen can't mirror"
     ))
 }
 

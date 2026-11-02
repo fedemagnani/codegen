@@ -1,0 +1,14 @@
+# the three crates ship together: probes, their macros and the subcommand reading them
+[[package]]
+name = "codegen-probe"
+version_group = "codegen"
+
+[[package]]
+name = "codegen-macros"
+version_group = "codegen"
+# published for `codegen-probe` to depend on, but only reached through it
+git_release_enable = false
+
+[[package]]
+name = "cargo-codegen"
+version_group = "codegen"

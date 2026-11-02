@@ -2,17 +2,17 @@
 
 See the assembly your users get from your crate's hot paths.
 
-- you write **probes**: small wrappers around your API, marked [`#[codegen::probe]`](../codegen)
+- you write **probes**: small wrappers around your API, marked [`#[codegen::probe]`](../codegen-probe)
 - `cargo codegen` compiles them **in a generated downstream crate**, so inlining matches your users'
 - then it lists, counts and diffs their assembly
-- mark functions [`#[codegen::watch]`](../codegen) to see how many of each probe's instructions come from them
+- mark functions [`#[codegen::watch]`](../codegen-probe) to see how many of each probe's instructions come from them
 
 ## Toy example
 
 ```toml
 # Cargo.toml: the attributes are no-ops unless `cargo codegen` builds
 [dependencies]
-codegen = { git = "https://github.com/fedemagnani/codegen" }
+codegen-probe = { git = "https://github.com/fedemagnani/codegen" }
 ```
 
 ```rust

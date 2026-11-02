@@ -1,10 +1,10 @@
 [package]
 name = "cargo-codegen"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 description = "Cargo subcommand for assembly-aware analysis: listings, instruction stats and baselines of a crate's probes"
 license = "MIT OR Apache-2.0"
-publish = false
+repository = "https://github.com/fedemagnani/codegen"
 
 [dependencies]
 # reads the package, its targets and `[package.metadata.codegen]` from `cargo metadata`

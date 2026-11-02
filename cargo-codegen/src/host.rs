@@ -51,8 +51,8 @@ path = \"lib.rs\"
 
 [dependencies]
 {dependency} = {{ path = {path}, default-features = {default_features}, features = [{features}] }}
-# the probed package's own `codegen`, its `enabled` feature unified onto every crate using it
-codegen = {{ {codegen_source}, features = [\"enabled\"] }}
+# the probed package's own `codegen-probe`, its `enabled` feature unified onto every crate using it
+codegen-probe = {{ {codegen_source}, features = [\"enabled\"] }}
 
 [workspace]
 ",
@@ -118,7 +118,7 @@ mod test {
             manifest.contains(r#"name = "codegen-host-my-crate""#),
             "{manifest}"
         );
-        let codegen = r#"codegen = { path = "/work/codegen", features = ["enabled"] }"#;
+        let codegen = r#"codegen-probe = { path = "/work/codegen", features = ["enabled"] }"#;
         assert!(manifest.contains(dependency), "{manifest}");
         assert!(manifest.contains(codegen), "{manifest}");
         assert!(manifest.trim_end().ends_with("[workspace]"), "{manifest}");

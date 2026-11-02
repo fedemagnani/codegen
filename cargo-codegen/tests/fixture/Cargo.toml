@@ -6,6 +6,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
-codegen = { path = "../../../codegen" }
+codegen-probe = { path = "../../../codegen-probe" }
 
 [workspace]

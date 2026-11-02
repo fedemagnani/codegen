@@ -1,10 +1,14 @@
 [package]
-name = "codegen"
-version = "0.0.0"
+name = "codegen-probe"
+version = "0.1.0"
 edition = "2024"
 description = "Probes for assembly-aware analysis: never-inlined wrappers of a crate's API, compiled as its users compile them"
 license = "MIT OR Apache-2.0"
-publish = false
+repository = "https://github.com/fedemagnani/codegen"
+
+[lib]
+# imported as `codegen` under its package name, as the attributes expand to `::codegen::`
+name = "codegen"
 
 [features]
 # turns the attributes and `probes!` on; `cargo codegen` enables it, so a crate never does
@@ -12,4 +16,4 @@ enabled = ["codegen-macros/enabled"]
 
 [dependencies]
 # `#[codegen::probe]`, re-exported as `probe`
-codegen-macros = { path = "../codegen-macros" }
+codegen-macros = { version = "0.1.0", path = "../codegen-macros" }
