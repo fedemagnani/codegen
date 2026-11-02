@@ -45,4 +45,14 @@ mod probes {
     fn fixture_watched_rotated(values: &[u64]) -> u64 {
         crate::watched_sum(values).rotate_left(1)
     }
+
+    // in bounds and past the end, so the bounds check goes both ways
+    #[codegen::inputs(fixture_unchecked)]
+    fn fixture_unchecked_inputs(m: &mut codegen::Measure) {
+        let values: Vec<u64> = (0..64).collect();
+        let inside: Vec<usize> = m.rng().indices(256, 64).collect();
+        let anywhere: Vec<usize> = m.rng().indices(256, 128).collect();
+        m.case("inside").run(&inside, |&i| fixture_unchecked(&values, i));
+        m.case("anywhere").run(&anywhere, |&i| fixture_unchecked(&values, i));
+    }
 }

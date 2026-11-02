@@ -74,8 +74,50 @@
 //! # fn main() {}
 //! ```
 //! - `#[cfg]` inside a `mod` or block is evaluated in the expanding crate: gate the whole `mod` or `probes!` instead
+//!
+//! ## Measuring probes
+//!
+//! [`inputs`] marks a `fn` of a probe block as the inputs of one probe: it prepares calls and counts them through
+//! [`Measure`], which `cargo codegen measure` runs, reporting hardware counters per call.
+//!
+//! ```rust
+//! pub fn get(values: &[u64], i: usize) -> u64 {
+//!     values[i]
+//! }
+//!
+//! #[codegen::probe]
+//! mod demo_measured {
+//!     fn demo_get(values: &[u64], i: usize) -> u64 {
+//!         crate::get(values, i)
+//!     }
+//!
+//!     #[codegen::inputs(demo_get)]
+//!     fn demo_get_inputs(m: &mut codegen::Measure) {
+//!         let values: Vec<u64> = (0..1 << 16).collect();
+//!         let calls: Vec<_> = m.rng().indices(1 << 12, values.len()).map(|i| (&values[..], i)).collect();
+//!         m.run(&calls, |&(values, i)| demo_get(values, i));
+//!     }
+//! }
+//! # fn main() {
+//! #     #[cfg(feature = "enabled")]
+//! #     __codegen_probe_demo_measured!();
+//! # }
+//! ```
+//!
+//! - `#[codegen::inputs(<probe>)]` goes first among the function's attributes, one inputs function per probe
+//! - [`Measure::case`] names distributions of the same probe's inputs, such as hits and misses
+//! - [`Measure::batched`] rebuilds a state before every pass, for probes taking `&mut`
+//! - [`Measure::rng`] is seeded the same on every run, so inputs are reproducible
 
-pub use codegen_macros::{probe, watch};
+pub use codegen_macros::{inputs, probe, watch};
+
+#[cfg(all(feature = "enabled", target_os = "macos"))]
+mod kperf;
+#[cfg(feature = "enabled")]
+mod measure;
+
+#[cfg(feature = "enabled")]
+pub use measure::{Case, Measure, Rng};
 
 /// Defines the exported macro `$name!()`, expanding the probes in the crate that invokes it, and registers it
 #[cfg(feature = "enabled")]
@@ -126,6 +168,27 @@ pub const fn __registry_entry<const N: usize>(entry: &str) -> [u8; N] {
 #[macro_export]
 macro_rules! __probe_items {
     () => {};
+    // an inputs function, exported under its probe's name for the runner `cargo codegen measure` generates
+    (
+        #[codegen::inputs($probe:ident)] $(#[$attr:meta])*
+        $vis:vis fn $inputs:ident ($($args:tt)*) $block:block
+        $($rest:tt)*
+    ) => {
+        $(#[$attr])*
+        $vis fn $inputs($($args)*) $block
+
+        const _: () = {
+            #[unsafe(export_name = ::core::concat!("__codegen_inputs_", ::core::stringify!($probe)))]
+            fn __codegen_inputs(measure: &mut $crate::Measure) {
+                // fails to compile when the inputs name no probe in scope
+                let _ = $probe;
+                measure.__probe(::core::stringify!($probe));
+                $inputs(measure);
+            }
+        };
+
+        $crate::__probe_items! { $($rest)* }
+    };
     // `fn` items, whatever their visibility, `unsafe` or ABI, so none silently stays a plain item
     ($(#[$attr:meta])* $vis:vis unsafe extern $abi:literal fn $($rest:tt)*) => {
         $crate::__probe_items! { @fn [$(#[$attr])*] [unsafe extern $abi] fn $($rest)* }
@@ -338,6 +401,33 @@ mod test {
         }
         let through_symbol = codegen_test_attribute_mod(1);
         assert_eq!(through_symbol, 4);
+    }
+
+    crate::probes!(measured_probes {
+        fn codegen_test_measured(x: u64) -> u64 {
+            $crate::test::add_base(x)
+        }
+
+        #[codegen::inputs(codegen_test_measured)]
+        /// Attributes after the marker stay on the inputs function
+        #[inline(never)]
+        fn codegen_test_measured_inputs(m: &mut codegen::Measure) {
+            let calls: Vec<u64> = m.rng().indices(8, 100).map(|i| i as u64).collect();
+            m.case("small").run(&calls, |&x| codegen_test_measured(x));
+            m.batched(Vec::new, &calls, |seen: &mut Vec<u64>, &x| seen.push(x));
+        }
+    });
+
+    measured_probes!();
+
+    #[test]
+    fn inputs_are_exported_under_their_probe_and_stay_plain_functions() {
+        unsafe extern "Rust" {
+            safe fn __codegen_inputs_codegen_test_measured(measure: &mut crate::Measure);
+        }
+        let mut measure = crate::Measure::dry();
+        __codegen_inputs_codegen_test_measured(&mut measure);
+        codegen_test_measured_inputs(&mut measure);
     }
 
     pub struct Counter(u64);

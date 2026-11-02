@@ -2,6 +2,9 @@
 
 use crate::target::Target;
 
+/// Prefix codegen-probe exports each inputs function under, followed by the name of the probe it measures
+pub const INPUTS_PREFIX: &str = "__codegen_inputs_";
+
 /// Assembly of the probe library for one target
 pub struct Listing<'a> {
     lines: Vec<&'a str>,
@@ -30,14 +33,25 @@ impl<'a> Listing<'a> {
         }
     }
 
-    /// Every exported unmangled symbol, in order of appearance, with its body
+    /// Every exported unmangled symbol but the inputs functions, in order of appearance, with its body
     pub fn probes(&self) -> Result<Vec<Probe<'a>>, String> {
         let names = self.exported_names();
-        let probes = names.into_iter().map(|name| self.probe(name));
-        probes.collect()
+        let probes = names
+            .into_iter()
+            .filter(|name| !name.starts_with(INPUTS_PREFIX));
+        probes.map(|name| self.probe(name)).collect()
     }
 
-    /// Unmangled `.globl` symbols: every Rust item is mangled, so these are exactly the `no_mangle` probes
+    /// Probes an inputs function measures, in order of appearance
+    pub fn measured(&self) -> Vec<&'a str> {
+        let names = self.exported_names();
+        let measured = names
+            .into_iter()
+            .filter_map(|name| name.strip_prefix(INPUTS_PREFIX));
+        measured.collect()
+    }
+
+    /// Unmangled `.globl` symbols: every Rust item is mangled, so these are the `no_mangle` probes and the inputs
     fn exported_names(&self) -> Vec<&'a str> {
         let mut names = Vec::new();
         for line in &self.lines {
@@ -160,6 +174,18 @@ probe_c:
         assert_eq!(names, ["probe_c", "probe_d"]);
         assert_eq!(probes[0].body.len(), 6);
         assert_eq!(probes[1].merged_into, Some("probe_c"));
+    }
+
+    #[test]
+    fn inputs_functions_are_no_probes() {
+        let text = "\t.globl\t_probe_a\n_probe_a:\n\t.cfi_startproc\n\tret\n\t.cfi_endproc\n\
+                    \t.globl\t___codegen_inputs_probe_a\n___codegen_inputs_probe_a:\n\t.cfi_startproc\n\tret\n\t.cfi_endproc";
+        let target = Target::parse("aarch64-apple-darwin").unwrap();
+        let listing = Listing::parse(text, &target);
+        let probes = listing.probes().unwrap();
+        let names: Vec<&str> = probes.iter().map(|probe| probe.name).collect();
+        assert_eq!(names, ["probe_a"]);
+        assert_eq!(listing.measured(), ["probe_a"]);
     }
 
     #[test]

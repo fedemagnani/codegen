@@ -90,7 +90,7 @@ impl Package {
 
     /// The probes built for `target`: their assembly, the object it assembles to and the watched functions
     pub fn build(&self, target: &Target) -> Result<Build, String> {
-        let (listing, watches) = self.emit(&target.triple)?;
+        let (listing, watches, macros) = self.emit(&target.triple)?;
         let assembly = fs::read_to_string(&listing)
             .map_err(|error| format!("reading {}: {error}", listing.display()))?;
         let object_path = listing.with_extension("o");
@@ -100,7 +100,46 @@ impl Package {
             assembly,
             object,
             watches,
+            macros,
         })
+    }
+
+    /// Builds the runner of `build`'s host crate, calling the inputs of each probe in `measured`, returning its path
+    pub fn runner(
+        &self,
+        target: &Target,
+        build: &Build,
+        measured: &[String],
+    ) -> Result<PathBuf, String> {
+        let host_dir = self.write_host(&build.macros, measured)?;
+        let runner = host::runner_name(&self.name);
+        let triple = &target.triple;
+        let mut command = self.cargo(&host_dir);
+        // `release`, as the listings: the probes in the runner must be the code they list
+        let args = [
+            "build",
+            "--quiet",
+            "--release",
+            "--bin",
+            &runner,
+            "--target",
+            triple,
+        ];
+        command
+            .args(args)
+            .arg("--message-format=json-render-diagnostics");
+        command.stderr(Stdio::inherit());
+        let output = command.output();
+        let output = output.map_err(|error| format!("running cargo: {error}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "building the runner of {} for {triple} failed",
+                self.name
+            ));
+        }
+        let messages = String::from_utf8_lossy(&output.stdout);
+        executable_artifact(&messages, &runner)
+            .ok_or_else(|| format!("cargo reported no executable {runner} for {triple}"))
     }
 
     /// `target/codegen/<package>`, where every command writes
@@ -114,8 +153,8 @@ impl Package {
     }
 
     /// Builds the package, reads its probe registry, then builds the host expanding them with `--emit asm`
-    fn emit(&self, triple: &str) -> Result<(PathBuf, Vec<Watch>), String> {
-        let host_dir = self.write_host(&[])?;
+    fn emit(&self, triple: &str) -> Result<(PathBuf, Vec<Watch>, Vec<String>), String> {
+        let host_dir = self.write_host(&[], &[])?;
         let rlib = self.build_package(&host_dir, triple)?;
         let Registry { probes, watches } = registry::read(&rlib)?;
         if probes.is_empty() {
@@ -124,7 +163,7 @@ impl Package {
                 self.name
             ));
         }
-        self.write_host(&probes)?;
+        self.write_host(&probes, &[])?;
         let mut command = self.cargo(&host_dir);
         // `release`, which `bench` inherits: `--profile bench` would build a bench harness needing a linker
         let args = ["rustc", "--quiet", "--lib", "--release", "--target", triple];
@@ -143,7 +182,7 @@ impl Package {
         let crate_name = host::crate_name(&self.name);
         let listing = newest_listing(&release_dir, &crate_name)
             .ok_or_else(|| format!("no {crate_name}-*.s under {}", release_dir.display()))?;
-        Ok((listing, watches))
+        Ok((listing, watches, probes))
     }
 
     /// Builds the host expanding no probes, returning the rlib of the package it depends on
@@ -180,7 +219,7 @@ impl Package {
     }
 
     /// Writes the host crate under `target/codegen/<package>/host`, its lock file seeded from the workspace's
-    fn write_host(&self, probes: &[String]) -> Result<PathBuf, String> {
+    fn write_host(&self, probes: &[String], measured: &[String]) -> Result<PathBuf, String> {
         let host_dir = self.codegen_dir().join("host");
         fs::create_dir_all(&host_dir)
             .map_err(|error| format!("creating {}: {error}", host_dir.display()))?;
@@ -193,11 +232,14 @@ impl Package {
             default_features: self.default_features,
             codegen_source: &self.codegen_source,
             probes,
+            measured,
         };
         let manifest = host::manifest(&spec);
         let library = host::library(&spec);
+        let runner = host::runner(&spec);
         write(&host_dir.join("Cargo.toml"), &manifest)?;
         write(&host_dir.join("lib.rs"), &library)?;
+        write(&host_dir.join("main.rs"), &runner)?;
         // the workspace's versions, so the probes see the dependencies the package is really built with
         let lock = self.workspace_root.join("Cargo.lock");
         if lock.exists() {
@@ -215,6 +257,8 @@ pub struct Build {
     /// The object file the same compilation assembled, its DWARF telling which inlined function each byte is from
     pub object: Vec<u8>,
     pub watches: Vec<Watch>,
+    /// Probe macros the host crate expanded, which the runner's build expands again
+    pub macros: Vec<String>,
 }
 
 /// The targets requested, the host when none is
@@ -382,6 +426,18 @@ fn rlib_artifact(messages: &str, manifest: &str) -> Option<PathBuf> {
     })
 }
 
+/// The executable cargo built for the binary target `name`, read from its JSON messages
+fn executable_artifact(messages: &str, name: &str) -> Option<PathBuf> {
+    messages.lines().find_map(|line| {
+        let message: Value = serde_json::from_str(line).ok()?;
+        let is_artifact = message["reason"] == "compiler-artifact";
+        if !is_artifact || message["target"]["name"] != name {
+            return None;
+        }
+        message["executable"].as_str().map(PathBuf::from)
+    })
+}
+
 /// Strings of a JSON array, empty when the value is missing or holds something else
 fn string_list(value: &Value) -> Vec<String> {
     let Some(items) = value.as_array() else {
@@ -531,6 +587,19 @@ mod test {
         let missing = pick_package(&packages, Some("other"));
         assert_eq!(found, Ok(&Value::from("demo")));
         assert!(missing.unwrap_err().contains("no package other"));
+    }
+
+    #[test]
+    fn the_runner_is_the_executable_of_its_target() {
+        let messages = [
+            r#"{"reason":"compiler-artifact","target":{"name":"codegen-host-demo"},"executable":null}"#,
+            r#"{"reason":"compiler-artifact","target":{"name":"codegen-runner-demo"},"executable":"/t/codegen-runner-demo"}"#,
+        ]
+        .join("\n");
+        let runner = executable_artifact(&messages, "codegen-runner-demo");
+        let missing = executable_artifact(&messages, "codegen-host-demo");
+        assert_eq!(runner, Some(PathBuf::from("/t/codegen-runner-demo")));
+        assert_eq!(missing, None);
     }
 
     #[test]

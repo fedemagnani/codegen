@@ -57,6 +57,27 @@ fn watching_a_function_leaves_its_code_unchanged() {
     assert_eq!(watched, plain);
 }
 
+// counting needs root and kperf, a dry run neither, so it checks the runner on every platform
+#[test]
+fn measure_dry_run_runs_every_case_of_the_inputs() {
+    let output = run("measure_dry", &["measure", "--dry-run"]);
+    for case in ["fixture_unchecked/inside", "fixture_unchecked/anywhere"] {
+        let ran = output
+            .lines()
+            .any(|line| line.starts_with(case) && line.contains("dry run: 256 calls"));
+        assert!(ran, "{case} missing\n{output}");
+    }
+    assert!(!output.contains("differs from the listing"), "{output}");
+}
+
+#[test]
+fn inputs_functions_are_no_probes() {
+    let output = run("stats_inputs", &["stats"]);
+    assert!(!output.contains("__codegen_inputs_"), "{output}");
+    let unchecked = row(&output, "fixture_unchecked");
+    assert!(!unchecked.is_empty(), "{output}");
+}
+
 /// Runs cargo-codegen on the fixture with its own target dir, returning standard output
 fn run(name: &str, args: &[&str]) -> String {
     let target_dir = target_dir(name);
