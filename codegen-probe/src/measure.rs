@@ -143,7 +143,7 @@ impl Measure {
             "case {case:?} of probe {} has no calls",
             self.probe
         );
-        if let Counters::Dry = self.counters {
+        if !self.counters.counting() {
             pass(&self.counters);
             println!("{ROW}\t{}\t{case}\t{calls}\tdry", self.probe);
             return;
@@ -257,6 +257,15 @@ impl Counters {
                 "reading hardware counters needs macOS for now, where kperf provides them"
                     .to_string(),
             )
+        }
+    }
+
+    /// Whether there are counters to read, not for a dry run; a match, as `Dry` is the only variant without a backend
+    fn counting(&self) -> bool {
+        match self {
+            #[cfg(target_os = "macos")]
+            Self::Kperf(_) => true,
+            Self::Dry => false,
         }
     }
 
