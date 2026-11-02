@@ -10,6 +10,7 @@ mod host;
 mod isa;
 mod listing;
 mod mca;
+mod measure;
 mod normalize;
 mod registry;
 mod stats;
@@ -28,6 +29,10 @@ commands:
                              --mca adds llvm-mca's cost estimates on <cpu>, the host CPU for the host target
   save [--baseline <name>]   save fresh builds as a baseline in target/codegen/<package>/baselines/, `base` by default
   diff [--baseline <name>]   compare fresh builds to a baseline, exiting 1 when a probe was added, removed or changed
+  measure [--raw] [--dry-run] [--no-sudo]
+                             count cycles, instructions, branches and mispredicts per call of each probe with
+                             `#[codegen::inputs]`, on the host; macOS only, as root through sudo unless --no-sudo;
+                             the empty loop's cost is subtracted unless --raw; --dry-run runs each case once, uncounted
 build options, each defaulting to [package.metadata.codegen] of the package:
   -p, --package <name>       package holding the probes, else the one containing the current directory
   --features <list>          features to build with, replacing the metadata's `features`
@@ -82,6 +87,16 @@ fn run(args: &[String]) -> Result<(), String> {
             let package = Package::resolve(&options.request)?;
             let name = options.baseline();
             baseline::diff(&package, &options.targets, name)
+        }
+        Some((command, rest)) if command == "measure" => {
+            let options = Options::parse(rest, &["--raw", "--dry-run", "--no-sudo"])?;
+            let package = Package::resolve(&options.request)?;
+            let measure = measure::Options {
+                raw: options.has("--raw"),
+                dry_run: options.has("--dry-run"),
+                sudo: !options.has("--no-sudo"),
+            };
+            measure::run(&package, &options.targets, &measure)
         }
         Some((flag, _)) if flag == "--help" || flag == "-h" => {
             println!("{USAGE}");

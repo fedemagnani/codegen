@@ -1,4 +1,4 @@
-//! `#[codegen::probe]` and `#[codegen::watch]`; use them through the `codegen` crate
+//! `#[codegen::probe]`, `#[codegen::watch]` and `#[codegen::inputs]`; use them through the `codegen` crate
 //!
 //! Both check their item in every build, but expand only under the `enabled` feature, which `cargo codegen` turns on.
 
@@ -26,6 +26,18 @@ pub fn watch(args: TokenStream, item: TokenStream) -> TokenStream {
         Ok(_) => item,
         Err((message, span)) => compile_error(&message, span),
     }
+}
+
+/// Marks a `fn` of a probe block as the inputs of a probe; the block expands it, so reaching this is misuse
+#[proc_macro_attribute]
+pub fn inputs(_args: TokenStream, item: TokenStream) -> TokenStream {
+    let span = item
+        .into_iter()
+        .next()
+        .map_or_else(Span::call_site, |token| token.span());
+    let message = "#[codegen::inputs(<probe>)] goes first among the attributes of a `fn` \
+                   inside a `#[codegen::probe] mod` or a `codegen::probes!` block";
+    compile_error(message, span)
 }
 
 /// `::codegen::probes!(<macro> { .. })` over the item, its `crate::` paths made `$crate::`

@@ -144,7 +144,7 @@ impl<'a> Inlines<'a> {
     }
 
     /// Bytes the subprogram of `symbol` spans, from its first range's start to its last range's end
-    fn extent(&self, symbol: &str) -> Result<u64, String> {
+    pub fn extent(&self, symbol: &str) -> Result<u64, String> {
         let (unit, offset, low_pc) = self.subprogram(symbol)?;
         let entry = unit.entry(offset).map_err(dwarf_error)?;
         let ranges = self.ranges(&unit, &entry)?;
