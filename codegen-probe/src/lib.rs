@@ -46,7 +46,7 @@
 //! - `fn` items become `pub` probes, `unsafe` and `extern` ones included; generic ones fail to compile
 //! - other items of a `mod`, such as `use`, statics or macro invocations, are expanded as written
 //! - [`probes!`] is the same as a probe `mod`, for macros generating probes: write `$crate::` there
-//! - keep the dependency named `codegen`: the attribute expands to `::codegen::probes!`
+//! - depend on `codegen-probe` without renaming it: the attribute expands to `::codegen::probes!`
 //!
 //! ## Watching functions
 //!

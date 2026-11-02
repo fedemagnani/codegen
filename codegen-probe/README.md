@@ -3,6 +3,12 @@
 Defines probes for [`cargo-codegen`](../cargo-codegen): never-inlined wrappers of your crate's API.
 A plain dependency: every attribute is a no-op unless `cargo codegen` builds.
 
+```toml
+[dependencies]
+# published as `codegen-probe`, imported as `codegen`
+codegen-probe = "0.1"
+```
+
 ```rust
 #[codegen::probe]
 fn my_get(values: &[u64], i: usize) -> u64 {
