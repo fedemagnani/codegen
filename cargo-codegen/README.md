@@ -12,7 +12,7 @@ See the assembly your users get from your crate's hot paths.
 ```toml
 # Cargo.toml: the attributes are no-ops unless `cargo codegen` builds
 [dependencies]
-codegen = { path = "../codegen" }
+codegen = { git = "https://github.com/fedemagnani/codegen" }
 ```
 
 ```rust
@@ -29,7 +29,7 @@ fn my_get(values: &[u64], i: usize) -> u64 {
 ```
 
 ```sh
-$ cargo install --path cargo-codegen
+$ cargo install --git https://github.com/fedemagnani/codegen cargo-codegen
 $ cargo codegen stats
 == aarch64-apple-darwin
 probe   instr  branch  jump  select  load  store  simd  barrier  call  panic
