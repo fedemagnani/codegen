@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-codegen"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "gimli",
  "iced-x86",
@@ -26,11 +26,11 @@ dependencies = [
 
 [[package]]
 name = "codegen-macros"
-version = "0.1.1"
+version = "0.1.2"
 
 [[package]]
 name = "codegen-probe"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "codegen-macros",
 ]

@@ -1,6 +1,6 @@
 [package]
 name = "codegen-probe"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Probes for assembly-aware analysis: never-inlined wrappers of a crate's API, compiled as its users compile them"
 license = "MIT OR Apache-2.0"
@@ -16,4 +16,4 @@ enabled = ["codegen-macros/enabled"]
 
 [dependencies]
 # `#[codegen::probe]`, re-exported as `probe`
-codegen-macros = { version = "0.1.1", path = "../codegen-macros" }
+codegen-macros = { version = "0.1.2", path = "../codegen-macros" }
